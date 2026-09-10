@@ -1,0 +1,30 @@
+@PuntoSabor_Backend_HostAddress = http://localhost:5048
+
+### Health check
+GET {{PuntoSabor_Backend_HostAddress}}/health
+Accept: application/json
+
+### Get categories
+GET {{PuntoSabor_Backend_HostAddress}}/categories
+Accept: application/json
+
+### Get huariques
+GET {{PuntoSabor_Backend_HostAddress}}/huariques
+Accept: application/json
+
+### Get plans
+GET {{PuntoSabor_Backend_HostAddress}}/plans
+Accept: application/json
+
+### Login
+POST {{PuntoSabor_Backend_HostAddress}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "owner@huariquehub.com",
+  "password": "123456"
+}
+
+### Get user profile
+GET {{PuntoSabor_Backend_HostAddress}}/auth/users/1
+Accept: application/json

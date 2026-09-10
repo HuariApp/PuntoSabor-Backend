@@ -1,0 +1,39 @@
+# ── Build output ──────────────────────────────────────────────────────────────
+bin/
+obj/
+out/
+
+# ── .NET / Rider / VS ─────────────────────────────────────────────────────────
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+*.rsuser
+*.DotSettings.user
+
+# ── Rider ─────────────────────────────────────────────────────────────────────
+.idea/
+
+# ── Publish output ────────────────────────────────────────────────────────────
+publish/
+**/Properties/PublishProfiles/
+
+# ── NuGet ─────────────────────────────────────────────────────────────────────
+*.nupkg
+*.snupkg
+project.lock.json
+packages/
+!**/packages/build/
+
+# ── Secrets / env ─────────────────────────────────────────────────────────────
+appsettings.Development.json
+appsettings.Local.json
+*.env
+.env
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
