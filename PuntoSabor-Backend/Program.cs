@@ -29,20 +29,35 @@ using PuntoSabor_Backend.Shared.Infrastructure.Persistence.EFC;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Debug: variables Railway
-Console.WriteLine(">>> ENV DB_HOST: " + Environment.GetEnvironmentVariable("DB_HOST"));
-Console.WriteLine(">>> ENV DB_PORT: " + Environment.GetEnvironmentVariable("DB_PORT"));
-Console.WriteLine(">>> ENV DB_NAME: " + Environment.GetEnvironmentVariable("DB_NAME"));
-Console.WriteLine(">>> ENV DB_USER: " + Environment.GetEnvironmentVariable("DB_USER"));
-Console.WriteLine(">>> ENV DB_PASSWORD: " +
-    (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DB_PASSWORD")) ? "NOT SET" : "SET"));
+// Helper: intenta varias variables de entorno en orden y devuelve la primera que tenga valor.
+static string? FirstEnv(params string[] names)
+{
+    foreach (var name in names)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        if (!string.IsNullOrWhiteSpace(value)) return value;
+    }
+    return null;
+}
 
-// Build connection string from env or config fallback
-var envHost = Environment.GetEnvironmentVariable("DB_HOST");
-var envPort = Environment.GetEnvironmentVariable("DB_PORT");
-var envName = Environment.GetEnvironmentVariable("DB_NAME");
-var envUser = Environment.GetEnvironmentVariable("DB_USER");
-var envPassword = Environment.GetEnvironmentVariable("DB_PASSWORD");
+// Acepta tanto las variables custom (DB_HOST, etc.) como las que Railway
+// genera automaticamente al agregar un plugin de MySQL (MYSQLHOST, etc.)
+// o la MYSQL_URL en formato mysql://user:pass@host:port/db
+var mysqlUrl = FirstEnv("MYSQL_URL", "MYSQL_PUBLIC_URL");
+
+var envHost = FirstEnv("DB_HOST", "MYSQLHOST");
+var envPort = FirstEnv("DB_PORT", "MYSQLPORT");
+var envName = FirstEnv("DB_NAME", "MYSQLDATABASE");
+var envUser = FirstEnv("DB_USER", "MYSQLUSER");
+var envPassword = FirstEnv("DB_PASSWORD", "MYSQLPASSWORD");
+
+// Debug: variables detectadas (nunca imprimir el password)
+Console.WriteLine(">>> ENV DB_HOST: " + (envHost ?? "NOT SET"));
+Console.WriteLine(">>> ENV DB_PORT: " + (envPort ?? "NOT SET"));
+Console.WriteLine(">>> ENV DB_NAME: " + (envName ?? "NOT SET"));
+Console.WriteLine(">>> ENV DB_USER: " + (envUser ?? "NOT SET"));
+Console.WriteLine(">>> ENV DB_PASSWORD: " + (string.IsNullOrWhiteSpace(envPassword) ? "NOT SET" : "SET"));
+Console.WriteLine(">>> ENV MYSQL_URL: " + (string.IsNullOrWhiteSpace(mysqlUrl) ? "NOT SET" : "SET"));
 
 var hasEnvConnection =
     !string.IsNullOrWhiteSpace(envHost) &&
@@ -51,12 +66,28 @@ var hasEnvConnection =
     !string.IsNullOrWhiteSpace(envUser) &&
     !string.IsNullOrWhiteSpace(envPassword);
 
-var connectionString = hasEnvConnection
-    ? $"server={envHost};port={envPort};database={envName};user={envUser};password={envPassword}"
-    : builder.Configuration.GetConnectionString("DefaultConnection");
+string? connectionString;
 
-if (string.IsNullOrWhiteSpace(connectionString))
-    throw new InvalidOperationException("Missing database connection string. Set env vars or ConnectionStrings:DefaultConnection.");
+if (hasEnvConnection)
+{
+    connectionString = $"server={envHost};port={envPort};database={envName};user={envUser};password={envPassword}";
+}
+else if (!string.IsNullOrWhiteSpace(mysqlUrl))
+{
+    // mysql://user:password@host:port/database
+    var uri = new Uri(mysqlUrl);
+    var userInfo = uri.UserInfo.Split(':', 2);
+    connectionString = $"server={uri.Host};port={uri.Port};database={uri.AbsolutePath.TrimStart('/')};user={userInfo[0]};password={userInfo[1]}";
+}
+else
+{
+    connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+}
+
+if (string.IsNullOrWhiteSpace(connectionString) || connectionString.Contains("${"))
+    throw new InvalidOperationException(
+        "Missing or invalid database connection string. Set DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD " +
+        "(o las variables MYSQLHOST/MYSQLPORT/MYSQLDATABASE/MYSQLUSER/MYSQLPASSWORD, o MYSQL_URL) en Railway.");
 
 // JWT secret from env var or appsettings
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET")
@@ -174,7 +205,10 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         Console.WriteLine(">>> ERROR AL CONECTAR A MYSQL EN STARTUP:");
-        Console.WriteLine(ex.Message);
+        Console.WriteLine(ex.ToString());
+        // No swallow: si la BD no esta lista, mejor que Railway marque el deploy
+        // como fallido en vez de dejar el servicio "vivo" respondiendo 500 en todo.
+        throw;
     }
 }
 
