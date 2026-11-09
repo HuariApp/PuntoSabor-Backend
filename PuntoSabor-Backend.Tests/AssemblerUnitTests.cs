@@ -13,7 +13,9 @@
 using System;
 using Xunit;
 using PuntoSabor_Backend.Auth.Domain.Model;
+using PuntoSabor_Backend.Discovery.Domain.Model;
 using PuntoSabor_Backend.Memberships.Domain.Model;
+using PuntoSabor_Backend.Promotions.Domain.Model;
 using PuntoSabor_Backend.Presentation.Resources;
 using PuntoSabor_Backend.Presentation.Transform;
 
@@ -224,6 +226,267 @@ namespace PuntoSabor_Backend.Tests
             var entity = CreateUserEntityFromResourceAssembler.ToEntityFromResource(resource);
 
             Assert.Equal(UserRole.Consumer, entity.Role);
+        }
+    }
+
+    public class CreateCategoryEntityFromResourceAssemblerTests
+    {
+        [Fact]
+        public void ToEntityFromResource_ConEspaciosAlInicioYAlFinal_LosRecorta()
+        {
+            var resource = new CreateCategoryResource(" Comida Rapida ");
+
+            var entity = CreateCategoryEntityFromResourceAssembler.ToEntityFromResource(resource);
+
+            Assert.Equal("Comida Rapida", entity.Name);
+        }
+
+        [Fact]
+        public void ToEntityFromResource_ConEspaciosDoblesEnMedio_NoLosColapsa()
+        {
+            // Caso borde: Trim() solo recorta los extremos, no normaliza espacios
+            // internos repetidos. Documenta el comportamiento real del Assembler.
+            var resource = new CreateCategoryResource(" Comida  Rapida ");
+
+            var entity = CreateCategoryEntityFromResourceAssembler.ToEntityFromResource(resource);
+
+            Assert.Equal("Comida  Rapida", entity.Name);
+        }
+    }
+
+    public class HuariqueResourceFromEntityAssemblerTests
+    {
+        [Fact]
+        public void ToResourceFromEntity_ConEntidadCompleta_CopiaTodosLosCamposEnOrden()
+        {
+            var entity = new Huarique
+            {
+                Id = 10,
+                Name = "Ceviche Bar",
+                Category = "Marina",
+                CategoryId = 3,
+                Price = 25.50m,
+                Rating = 4.5,
+                District = "Miraflores",
+                Near = true,
+                Latitude = -12.1,
+                Longitude = -77.0,
+                OwnerId = 7,
+                Address = "Av. Larco 123",
+                Phone = "999888777",
+                Description = "Rico ceviche",
+                ImageUrl = "http://img.test/1.png",
+                OpenAt = "09:00",
+                CloseAt = "22:00",
+                DeliveryAvailable = true,
+                TakeawayAvailable = false,
+                DineInAvailable = true,
+                CreatedAt = new DateTime(2026, 1, 1),
+                UpdatedAt = new DateTime(2026, 2, 1)
+            };
+
+            var resource = HuariqueResourceFromEntityAssembler.ToResourceFromEntity(entity);
+
+            Assert.Equal(10, resource.Id);
+            Assert.Equal("Ceviche Bar", resource.Name);
+            Assert.Equal("Marina", resource.Category);
+            Assert.Equal(3, resource.CategoryId);
+            Assert.Equal(25.50m, resource.Price);
+            Assert.Equal(4.5, resource.Rating);
+            Assert.Equal("Miraflores", resource.District);
+            Assert.True(resource.Near);
+            Assert.Equal(-12.1, resource.Latitude);
+            Assert.Equal(-77.0, resource.Longitude);
+            Assert.Equal(7, resource.OwnerId);
+            Assert.Equal("Av. Larco 123", resource.Address);
+            Assert.Equal("999888777", resource.Phone);
+            Assert.Equal("Rico ceviche", resource.Description);
+            Assert.Equal("http://img.test/1.png", resource.ImageUrl);
+            Assert.Equal("09:00", resource.OpenAt);
+            Assert.Equal("22:00", resource.CloseAt);
+            Assert.True(resource.DeliveryAvailable);
+            Assert.False(resource.TakeawayAvailable);
+            Assert.True(resource.DineInAvailable);
+            Assert.Equal(new DateTime(2026, 1, 1), resource.CreatedAt);
+            Assert.Equal(new DateTime(2026, 2, 1), resource.UpdatedAt);
+        }
+
+        [Fact]
+        public void ToResourceFromEntity_ConCamposOpcionalesNulos_PropagaLosNulosSinLanzar()
+        {
+            var entity = new Huarique
+            {
+                Id = 11,
+                Name = "Pollo a la Brasa",
+                Category = "Parrilla",
+                CategoryId = 1,
+                Price = 18m,
+                District = "San Isidro",
+                UpdatedAt = null
+            };
+
+            var resource = HuariqueResourceFromEntityAssembler.ToResourceFromEntity(entity);
+
+            Assert.Null(resource.Latitude);
+            Assert.Null(resource.Longitude);
+            Assert.Null(resource.OwnerId);
+            Assert.Null(resource.Address);
+            Assert.Null(resource.Phone);
+            Assert.Null(resource.Description);
+            Assert.Null(resource.ImageUrl);
+            Assert.Null(resource.OpenAt);
+            Assert.Null(resource.CloseAt);
+            Assert.Null(resource.UpdatedAt);
+        }
+    }
+
+    public class PromoResourceFromEntityAssemblerTests
+    {
+        [Fact]
+        public void ToResourceFromEntity_ConPromoDentroDeRango_PropagaIsActiveEnTrue()
+        {
+            var entity = new Promo
+            {
+                Id = 1,
+                Title = "2x1 en ceviche",
+                Note = "Solo fines de semana",
+                Type = "2x1",
+                Discount = 0,
+                Code = "PROMO1",
+                StartDate = DateTime.UtcNow.AddDays(-1),
+                EndDate = DateTime.UtcNow.AddDays(5),
+                MaxUses = 10,
+                CurrentUses = 2,
+                HuariqueId = 4,
+                ImageUrl = "http://img.test/promo.png"
+            };
+
+            var resource = PromoResourceFromEntityAssembler.ToResourceFromEntity(entity);
+
+            Assert.Equal(1, resource.Id);
+            Assert.Equal("2x1 en ceviche", resource.Title);
+            Assert.Equal("2x1", resource.Type);
+            Assert.Equal(10, resource.MaxUses);
+            Assert.Equal(2, resource.CurrentUses);
+            Assert.Equal(4, resource.HuariqueId);
+            Assert.True(resource.IsActive);
+        }
+
+        [Fact]
+        public void ToResourceFromEntity_ConMaxUsesNuloYSinFechas_PropagaIsActiveEnTrueYCamposNulos()
+        {
+            // Caso borde: MaxUses nulo hace que Promo.IsActive ignore el limite de usos
+            // (ver Promo.cs), el Assembler debe propagar ese calculo tal cual, no
+            // recalcularlo por su cuenta.
+            var entity = new Promo
+            {
+                Id = 2,
+                Title = "Descuento general",
+                Note = "Aplica todos los dias",
+                Type = "otro",
+                Discount = 10,
+                MaxUses = null,
+                CurrentUses = 999
+            };
+
+            var resource = PromoResourceFromEntityAssembler.ToResourceFromEntity(entity);
+
+            Assert.Null(resource.Code);
+            Assert.Null(resource.StartDate);
+            Assert.Null(resource.EndDate);
+            Assert.Null(resource.MaxUses);
+            Assert.Null(resource.HuariqueId);
+            Assert.Null(resource.ImageUrl);
+            Assert.True(resource.IsActive);
+        }
+    }
+
+    public class SubscriptionResourceFromEntityAssemblerTests
+    {
+        [Fact]
+        public void ToResourceFromEntity_ConPlanCargado_CopiaNombreYPrecioDelPlan()
+        {
+            var entity = new Subscription
+            {
+                Id = 5,
+                UserId = 42,
+                PlanId = "premium",
+                Plan = new Plan { Id = "premium", Name = "Premium", Price = 29.90m },
+                Status = "active",
+                StartDate = DateTime.UtcNow.AddMonths(-1),
+                EndDate = null
+            };
+
+            var resource = SubscriptionResourceFromEntityAssembler.ToResourceFromEntity(entity);
+
+            Assert.Equal("premium", resource.PlanId);
+            Assert.Equal("Premium", resource.PlanName);
+            Assert.Equal(29.90m, resource.PlanPrice);
+            Assert.True(resource.IsActive);
+        }
+
+        [Fact]
+        public void ToResourceFromEntity_ConPlanNoCargado_PlanNameYPlanPriceQuedanNulos()
+        {
+            // Caso borde que expone un riesgo real: si el repositorio no hace
+            // Include(s => s.Plan), la navegacion queda nula y el Assembler
+            // devuelve PlanName/PlanPrice en null aunque exista un PlanId valido.
+            var entity = new Subscription
+            {
+                Id = 6,
+                UserId = 42,
+                PlanId = "premium",
+                Plan = null,
+                Status = "active",
+                StartDate = DateTime.UtcNow.AddMonths(-1)
+            };
+
+            var resource = SubscriptionResourceFromEntityAssembler.ToResourceFromEntity(entity);
+
+            Assert.Equal("premium", resource.PlanId);
+            Assert.Null(resource.PlanName);
+            Assert.Null(resource.PlanPrice);
+        }
+    }
+
+    public class UserResourceFromEntityAssemblerTests
+    {
+        [Fact]
+        public void ToResourceFromEntity_ConRoleOwner_DevuelveRoleEnMinusculas()
+        {
+            var entity = new User
+            {
+                Id = 1,
+                Name = "Carlos",
+                Email = "carlos@test.com",
+                PasswordHash = "hash",
+                Role = UserRole.Owner,
+                UpdatedAt = new DateTime(2026, 2, 1)
+            };
+
+            var resource = UserResourceFromEntityAssembler.ToResourceFromEntity(entity);
+
+            Assert.Equal("owner", resource.Role);
+            Assert.Equal(new DateTime(2026, 2, 1), resource.UpdatedAt);
+        }
+
+        [Fact]
+        public void ToResourceFromEntity_ConRoleConsumerYSinActualizar_DevuelveRoleConsumerYUpdatedAtNulo()
+        {
+            var entity = new User
+            {
+                Id = 2,
+                Name = "Ana",
+                Email = "ana@test.com",
+                PasswordHash = "hash",
+                Role = UserRole.Consumer,
+                UpdatedAt = null
+            };
+
+            var resource = UserResourceFromEntityAssembler.ToResourceFromEntity(entity);
+
+            Assert.Equal("consumer", resource.Role);
+            Assert.Null(resource.UpdatedAt);
         }
     }
 }
