@@ -197,14 +197,11 @@ namespace PuntoSabor_Backend.Tests
         }
 
         [Fact]
-        public void ToEntityFromResource_ConRoleOwnerConEspaciosExtra_CaeSilenciosamenteAConsumer()
+        public void ToEntityFromResource_ConRoleOwnerConEspaciosExtra_AsignaRolOwner()
         {
-            // Caso borde que documenta el bug reportado en
-            // CreateUserEntityFromResourceAssembler.cs linea 18: la comparacion
-            // "resource.Role?.ToLowerInvariant() == \"owner\"" no recorta espacios,
-            // por lo que un Role valido pero con espacios se degrada a Consumer
-            // sin error ni validacion. Este test fija el comportamiento ACTUAL
-            // (no el deseado) para detectar si cambia sin querer.
+            // CreateUserEntityFromResourceAssembler.cs linea 18 ahora recorta espacios
+            // antes de comparar (resource.Role?.Trim().ToLowerInvariant() == "owner"),
+            // por lo que un Role valido con espacios ya no se degrada a Consumer.
             var resource = new CreateUserResource(
                 Name: "Ana",
                 Email: "ana@test.com",
@@ -213,7 +210,7 @@ namespace PuntoSabor_Backend.Tests
 
             var entity = CreateUserEntityFromResourceAssembler.ToEntityFromResource(resource);
 
-            Assert.Equal(UserRole.Consumer, entity.Role);
+            Assert.Equal(UserRole.Owner, entity.Role);
         }
 
         [Fact]

@@ -15,7 +15,7 @@ public static class CreateUserEntityFromResourceAssembler
 {
     public static User ToEntityFromResource(CreateUserResource resource)
     {
-        var role = resource.Role?.ToLowerInvariant() == "owner"
+        var role = resource.Role?.Trim().ToLowerInvariant() == "owner"
             ? PuntoSabor_Backend.Auth.Domain.Model.UserRole.Owner
             : PuntoSabor_Backend.Auth.Domain.Model.UserRole.Consumer;
 
