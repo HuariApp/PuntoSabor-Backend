@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 
 namespace PuntoSabor_Backend.Shared.Infrastructure.Persistence.EFC;
@@ -25,7 +26,25 @@ public static class SchemaInitializer
             .First();
 
         if (exists == 0)
+        {
+            // ExecuteSql's FormattableString parametrization (EF1002's suggested fix) only binds
+            // VALUE placeholders, not identifiers: MySQL doesn't allow a bound parameter in place
+            // of a table/column name in DDL, so ALTER TABLE `{0}` ADD COLUMN `{1}` would fail at
+            // runtime. table/column/definition are always internal literals passed from
+            // EnsureExtraTables below, never external input, but we still validate the identifiers
+            // defensively before interpolating them into the DDL string.
+            ValidateIdentifier(table);
+            ValidateIdentifier(column);
+#pragma warning disable EF1002
             context.Database.ExecuteSqlRaw($"ALTER TABLE `{table}` ADD COLUMN `{column}` {definition}");
+#pragma warning restore EF1002
+        }
+    }
+
+    private static void ValidateIdentifier(string identifier)
+    {
+        if (!Regex.IsMatch(identifier, "^[A-Za-z_][A-Za-z0-9_]*$"))
+            throw new ArgumentException($"Identificador SQL inválido: '{identifier}'.", nameof(identifier));
     }
     public static void EnsureExtraTables(AppDbContext context)
     {
